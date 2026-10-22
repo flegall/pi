@@ -13,7 +13,7 @@ The demo uses Pi's fullscreen TUI and needs no API key or extension.
 - **Tab** moves it between the image body and its first row.
 - **Ctrl+C** exits before switching branches.
 
-On `florent.legall/tui-image-overlay-hide-repro`, the image covers the modal.
+On `florent.legall/tui-image-overlay-hide-repro`, the image covers the left part of the modal while its right side stays visible.
 On `florent.legall/tui-image-overlay-hide-fixed-demo`, the overlapping image is hidden while the modal is open and restored on close.
 
 Checkout only: keep discussion on the fix PR and do not merge the demos.
