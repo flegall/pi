@@ -4,6 +4,7 @@
 
 import { performance } from "node:perf_hooks";
 import { isKeyRelease, matchesKey } from "./keys.ts";
+import { KittyImageOverlay } from "./kitty-image-overlay.ts";
 import type { Terminal } from "./terminal.ts";
 import {
 	parseOscColorResponse,
@@ -12,13 +13,7 @@ import {
 	type TerminalColorScheme,
 	type TerminalColors,
 } from "./terminal-colors.ts";
-import {
-	getCapabilities,
-	getKittyImageMetadata,
-	getKittyImagePlacement,
-	isImageLine,
-	setCellDimensions,
-} from "./terminal-image.ts";
+import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-image.ts";
 import { extractSegments, normalizeTerminalOutput, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils.ts";
 
 /**
@@ -436,11 +431,7 @@ export function compositeTuiLine(
 	overlayWidth: number,
 	totalWidth: number,
 ): string {
-	if (isImageLine(baseLine)) {
-		if (!getKittyImageMetadata(baseLine)) return baseLine;
-		// Give the zero-width image command a cell so segment extraction preserves it.
-		baseLine += " ".repeat(Math.max(0, totalWidth - visibleWidth(baseLine)));
-	}
+	if (isImageLine(baseLine)) return baseLine;
 
 	const afterStart = startCol + overlayWidth;
 	const base = extractSegments(baseLine, startCol, afterStart, totalWidth - afterStart, true);
@@ -1440,37 +1431,32 @@ export abstract class TuiBase extends Container implements TUI {
 
 		const viewportStart = Math.max(0, workingHeight - termHeight);
 
+		const images = this.mode === "fullscreen" && rendered.length > 0 ? new KittyImageOverlay() : undefined;
+		const viewport = { x: 0, y: viewportStart, width: termWidth, height: termHeight };
+		if (images) {
+			for (let row = viewportStart; row < result.length; row++) {
+				result[row] = images.extract(result[row], row, 0, viewport);
+			}
+		}
+
 		// Composite each overlay
 		for (const { overlayLines, row, col, w } of rendered) {
-			// Kitty placements sit above terminal text; suppress intersecting images before painting an overlay.
-			for (let imageRow = 0; imageRow < result.length; imageRow++) {
-				const line = result[imageRow];
-				const metadata = getKittyImageMetadata(line);
-				if (!metadata || overlayLines.length === 0) continue;
-				const placement = getKittyImagePlacement(line);
-				if (!placement) continue;
-				const imageCol = visibleWidth(line.slice(0, line.indexOf("\x1b_G")));
-				if (
-					imageRow < viewportStart + row + overlayLines.length &&
-					imageRow + placement.rows > viewportStart + row &&
-					imageCol < col + w &&
-					imageCol + metadata.columns > col
-				) {
-					result[imageRow] = placement.replacementLine.replace(placement.sequence, "");
-				}
-			}
+			const bounds = { x: col, y: viewportStart + row, width: w, height: overlayLines.length };
+			images?.cover(bounds);
 			for (let i = 0; i < overlayLines.length; i++) {
 				const idx = viewportStart + row + i;
 				if (idx >= 0 && idx < result.length) {
 					// Defensive: truncate overlay line to declared width before compositing
 					// (components should already respect width, but this ensures it)
+					const overlayLine = images?.extract(overlayLines[i], idx, col, bounds) ?? overlayLines[i];
 					const truncatedOverlayLine =
-						visibleWidth(overlayLines[i]) > w ? sliceByColumn(overlayLines[i], 0, w, true) : overlayLines[i];
+						visibleWidth(overlayLine) > w ? sliceByColumn(overlayLine, 0, w, true) : overlayLine;
 					result[idx] = this.compositeLineAt(result[idx], truncatedOverlayLine, col, w, termWidth);
 				}
 			}
 		}
 
+		images?.paint(result);
 		return result;
 	}
 

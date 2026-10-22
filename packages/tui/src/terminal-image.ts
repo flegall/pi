@@ -340,6 +340,7 @@ interface RegisteredKittyImageMetadata extends KittyImageMetadata {
 }
 
 export interface KittyImagePlacement {
+	start: number;
 	imageId: number;
 	transmissionGeneration: number;
 	transmissionBytes: number;
@@ -415,18 +416,20 @@ const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
 	"V",
 ]);
 
-/** Read the number of rows covered by an image placement without scanning its payload. */
+/** Read the maximum height of image transmissions anchored on this row. */
 export function getKittyImagePlacementRows(line: string): number | undefined {
-	const controls = /\x1b_G([^;]*);/.exec(line)?.[1];
-	if (controls === undefined) return undefined;
-	const explicitRows = getExplicitKittyImageRows(controls);
-	if (explicitRows !== undefined) return explicitRows;
-	return getRegisteredKittyImageMetadataFromControls(controls)?.rows;
+	let rows: number | undefined;
+	for (const match of line.matchAll(/\x1b_G([^;\x1b]*);/g)) {
+		const height = getExplicitKittyImageRows(match[1]) ?? getRegisteredKittyImageMetadataFromControls(match[1])?.rows;
+		if (height !== undefined) rows = Math.max(rows ?? 0, height);
+	}
+	return rows;
 }
 
 /** Build a placement-only command for an image line emitted by {@link renderImage}. */
-export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
-	const match = /\x1b_G([^;]*);/.exec(line);
+export function getKittyImagePlacement(line: string, offset = 0): KittyImagePlacement | undefined {
+	const match = /\x1b_G([^;\x1b]*);/.exec(line.slice(offset));
+	if (match) match.index += offset;
 	if (!match) return undefined;
 	const metadata = getRegisteredKittyImageMetadataFromControls(match[1]);
 	if (!metadata) return undefined;
@@ -449,9 +452,10 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
 	const controls = match[1]
 		.split(",")
 		.filter((control) => KITTY_PLACEMENT_CONTROL_KEYS.has(control.split("=", 1)[0] ?? ""));
-	const sequence = `\x1b_Ga=p,q=2,${controls.join(",")}\x1b\\`;
+	const sequence = /(?:^|,)a=t(?:,|$)/.test(match[1]) ? "" : `\x1b_Ga=p,q=2,${controls.join(",")}\x1b\\`;
 	return {
 		imageId: metadata.imageId,
+		start: match.index,
 		transmissionGeneration: metadata.transmissionGeneration,
 		transmissionBytes: transmissionEnd - match.index,
 		estimatedDecodedBytes: metadata.widthPx * metadata.heightPx * 4,
