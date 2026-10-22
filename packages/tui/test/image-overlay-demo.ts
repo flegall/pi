@@ -25,7 +25,7 @@ box.addChild(
 		readFileSync(new URL("../../ai/test/data/red-circle.png", import.meta.url)).toString("base64"),
 		"image/png",
 		{ fallbackColor: (text) => text },
-		{ maxWidthCells: 80, maxHeightCells: 28 },
+		{ maxWidthCells: 32, maxHeightCells: 28 },
 	),
 );
 content.addChild(box);
@@ -38,7 +38,7 @@ modal.addChild(
 let overlay: OverlayHandle | undefined;
 let atAnchor = false;
 function showModal(): void {
-	overlay = tui.showOverlay(modal, { width: 36, row: atAnchor ? 2 : 10, col: 14 });
+	overlay = tui.showOverlay(modal, { width: 36, row: atAnchor ? 2 : 6, col: 14 });
 }
 tui.addInputListener((input) => {
 	const keys = getKeybindings();
