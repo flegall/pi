@@ -33,16 +33,12 @@ tui.setLayoutRoot(content);
 
 const modal = new Box(2, 1, (text) => `\x1b[48;2;35;45;80m\x1b[97m${text}\x1b[0m`);
 modal.addChild(
-	new Text(
-		"MODAL — all these lines should be readable\n\nServer: example\nStatus: connected\n\nEnter: close / reopen",
-		0,
-		0,
-	),
+	new Text("MODAL — readable above the image\n\nServer: example\nStatus: connected\n\nEnter: close / reopen", 0, 0),
 );
 let overlay: OverlayHandle | undefined;
 let atAnchor = false;
 function showModal(): void {
-	overlay = tui.showOverlay(modal, { width: 52, row: atAnchor ? 2 : 7, col: 16 });
+	overlay = tui.showOverlay(modal, { width: 36, row: atAnchor ? 2 : 10, col: 14 });
 }
 tui.addInputListener((input) => {
 	const keys = getKeybindings();
