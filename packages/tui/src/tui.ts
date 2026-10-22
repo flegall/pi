@@ -12,7 +12,13 @@ import {
 	type TerminalColorScheme,
 	type TerminalColors,
 } from "./terminal-colors.ts";
-import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-image.ts";
+import {
+	getCapabilities,
+	getKittyImageMetadata,
+	getKittyImagePlacement,
+	isImageLine,
+	setCellDimensions,
+} from "./terminal-image.ts";
 import { extractSegments, normalizeTerminalOutput, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils.ts";
 
 /**
@@ -430,7 +436,11 @@ export function compositeTuiLine(
 	overlayWidth: number,
 	totalWidth: number,
 ): string {
-	if (isImageLine(baseLine)) return baseLine;
+	if (isImageLine(baseLine)) {
+		if (!getKittyImageMetadata(baseLine)) return baseLine;
+		// Give the zero-width image command a cell so segment extraction preserves it.
+		baseLine += " ".repeat(Math.max(0, totalWidth - visibleWidth(baseLine)));
+	}
 
 	const afterStart = startCol + overlayWidth;
 	const base = extractSegments(baseLine, startCol, afterStart, totalWidth - afterStart, true);
@@ -1432,6 +1442,23 @@ export abstract class TuiBase extends Container implements TUI {
 
 		// Composite each overlay
 		for (const { overlayLines, row, col, w } of rendered) {
+			// Kitty placements sit above terminal text; suppress intersecting images before painting an overlay.
+			for (let imageRow = 0; imageRow < result.length; imageRow++) {
+				const line = result[imageRow];
+				const metadata = getKittyImageMetadata(line);
+				if (!metadata || overlayLines.length === 0) continue;
+				const placement = getKittyImagePlacement(line);
+				if (!placement) continue;
+				const imageCol = visibleWidth(line.slice(0, line.indexOf("\x1b_G")));
+				if (
+					imageRow < viewportStart + row + overlayLines.length &&
+					imageRow + placement.rows > viewportStart + row &&
+					imageCol < col + w &&
+					imageCol + metadata.columns > col
+				) {
+					result[imageRow] = placement.replacementLine.replace(placement.sequence, "");
+				}
+			}
 			for (let i = 0; i < overlayLines.length; i++) {
 				const idx = viewportStart + row + i;
 				if (idx >= 0 && idx < result.length) {
