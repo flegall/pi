@@ -4,6 +4,7 @@
 
 import { performance } from "node:perf_hooks";
 import { isKeyRelease, matchesKey } from "./keys.ts";
+import { KittyImageOverlay } from "./kitty-image-overlay.ts";
 import type { Terminal } from "./terminal.ts";
 import {
 	parseOscColorResponse,
@@ -1430,20 +1431,32 @@ export abstract class TuiBase extends Container implements TUI {
 
 		const viewportStart = Math.max(0, workingHeight - termHeight);
 
+		const images = this.mode === "fullscreen" && rendered.length > 0 ? new KittyImageOverlay() : undefined;
+		const viewport = { x: 0, y: viewportStart, width: termWidth, height: termHeight };
+		if (images) {
+			for (let row = viewportStart; row < result.length; row++) {
+				result[row] = images.extract(result[row], row, 0, viewport);
+			}
+		}
+
 		// Composite each overlay
 		for (const { overlayLines, row, col, w } of rendered) {
+			const bounds = { x: col, y: viewportStart + row, width: w, height: overlayLines.length };
+			images?.cover(bounds);
 			for (let i = 0; i < overlayLines.length; i++) {
 				const idx = viewportStart + row + i;
 				if (idx >= 0 && idx < result.length) {
 					// Defensive: truncate overlay line to declared width before compositing
 					// (components should already respect width, but this ensures it)
+					const overlayLine = images?.extract(overlayLines[i], idx, col, bounds) ?? overlayLines[i];
 					const truncatedOverlayLine =
-						visibleWidth(overlayLines[i]) > w ? sliceByColumn(overlayLines[i], 0, w, true) : overlayLines[i];
+						visibleWidth(overlayLine) > w ? sliceByColumn(overlayLine, 0, w, true) : overlayLine;
 					result[idx] = this.compositeLineAt(result[idx], truncatedOverlayLine, col, w, termWidth);
 				}
 			}
 		}
 
+		images?.paint(result);
 		return result;
 	}
 

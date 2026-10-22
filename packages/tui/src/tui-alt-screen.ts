@@ -445,22 +445,27 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 	private prepareKittyScreen(screen: string[]): { lines: string[]; evictedImageDeletion: string } {
 		const visibleImageIds = new Set<number>();
 		const lines = screen.map((line) => {
-			const placement = getKittyImagePlacement(line);
-			if (!placement) return line;
-			visibleImageIds.add(placement.imageId);
-
-			const cachedImage = this.uploadedKittyImages.get(placement.imageId);
-			const nextCachedImage = {
-				transmissionGeneration: placement.transmissionGeneration,
-				transmissionBytes: placement.transmissionBytes,
-				estimatedDecodedBytes: placement.estimatedDecodedBytes,
-			};
-			if (cachedImage) this.uploadedKittyImages.delete(placement.imageId);
-			this.uploadedKittyImages.set(placement.imageId, nextCachedImage);
-
-			return cachedImage?.transmissionGeneration === placement.transmissionGeneration
-				? placement.replacementLine
-				: line;
+			let result = "";
+			let offset = 0;
+			while (true) {
+				const placement = getKittyImagePlacement(line, offset);
+				if (!placement) break;
+				visibleImageIds.add(placement.imageId);
+				const cachedImage = this.uploadedKittyImages.get(placement.imageId);
+				if (cachedImage) this.uploadedKittyImages.delete(placement.imageId);
+				this.uploadedKittyImages.set(placement.imageId, {
+					transmissionGeneration: placement.transmissionGeneration,
+					transmissionBytes: placement.transmissionBytes,
+					estimatedDecodedBytes: placement.estimatedDecodedBytes,
+				});
+				result += line.slice(offset, placement.start);
+				offset = placement.start + placement.transmissionBytes;
+				result +=
+					cachedImage?.transmissionGeneration === placement.transmissionGeneration
+						? placement.sequence
+						: line.slice(placement.start, offset);
+			}
+			return result + line.slice(offset);
 		});
 
 		let cachedOffscreenImageCount = 0;
