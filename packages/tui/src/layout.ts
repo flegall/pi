@@ -8,6 +8,7 @@ import {
 	getActiveBackgroundAnsi,
 	getGraphemeCellRange,
 	sliceByColumn,
+	stripTerminalSequences,
 	visibleWidth,
 } from "./utils.ts";
 
@@ -369,7 +370,7 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
 				}
 				break;
 			}
-			if (imageLine !== "") break;
+			if (stripTerminalSequences(imageLine).trim() !== "") break;
 		}
 	}
 
